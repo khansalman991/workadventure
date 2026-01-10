@@ -1,0 +1,387 @@
+import { applyFieldMask } from "protobuf-fieldmask";
+import { merge } from "lodash";
+import * as Sentry from "@sentry/node";
+import type {
+    BackToPusherSpaceMessage,
+    PrivateEvent,
+    PublicEvent,
+    SpaceAnswerMessage,
+    SpaceQueryMessage,
+    SpaceUser,
+} from "@workadventure/messages";
+import {
+    AddSpaceUserMessage,
+    FilterType,
+    RemoveSpaceUserMessage,
+    UpdateSpaceMetadataMessage,
+} from "@workadventure/messages";
+import Debug from "debug";
+import { asError } from "catch-unknown";
+import { clientEventsEmitter } from "../Services/ClientEventsEmitter";
+import type { CustomJsonReplacerInterface } from "./CustomJsonReplacerInterface";
+import type { SpacesWatcher } from "./SpacesWatcher";
+import type { EventProcessor } from "./EventProcessor";
+import { CommunicationManager } from "./CommunicationManager";
+import type { ICommunicationManager } from "./Interfaces/ICommunicationManager";
+import type { ICommunicationSpace } from "./Interfaces/ICommunicationSpace";
+
+const debug = Debug("space");
+
+type Filter = Exclude<FilterType, FilterType.UNRECOGNIZED>;
+
+export class Space implements CustomJsonReplacerInterface, ICommunicationSpace {
+    readonly name: string;
+    private users: Map<SpacesWatcher, Map<string, SpaceUser>>;
+    private metadata: Map<string, unknown>;
+    private communicationManager: ICommunicationManager;
+    private usersToNotify: Map<SpacesWatcher, Map<string, SpaceUser>>;
+    private _nbPublishers = 0;
+    private _nbUsers = 0;
+    private _nbWatchers = 0;
+
+    constructor(
+        name: string,
+        private _filterType: Filter,
+        private eventProcessor: EventProcessor,
+        private _propertiesToSync: string[],
+        public readonly world: string,
+        private _spaceUpdatedSubject = clientEventsEmitter.spaceUpdatedSubject
+    ) {
+        this.name = name;
+        this.users = new Map<SpacesWatcher, Map<SpaceUser["spaceUserId"], SpaceUser>>();
+        this.usersToNotify = new Map<SpacesWatcher, Map<SpaceUser["spaceUserId"], SpaceUser>>();
+        this.metadata = new Map<string, unknown>();
+        this.communicationManager = new CommunicationManager(this);
+        debug(`${name} => created`);
+    }
+
+    public addUser(sourceWatcher: SpacesWatcher, spaceUser: SpaceUser) {
+        try {
+            const usersList = this.usersList(sourceWatcher);
+            usersList.set(spaceUser.spaceUserId, spaceUser);
+            this._nbUsers++;
+            if (this.isPublishing(spaceUser)) this._nbPublishers++;
+            if (this._nbPublishers > 0) this._nbWatchers = this._nbUsers;
+            this._spaceUpdatedSubject.next(this);
+
+            if (!this.filterOneUser(spaceUser)) return;
+
+            this.notifyWatchers({
+                $case: "addSpaceUserMessage",
+                addSpaceUserMessage: AddSpaceUserMessage.fromPartial({
+                    spaceName: this.name,
+                    user: spaceUser,
+                }),
+            } as any);
+
+            this.communicationManager.handleUserAdded(spaceUser).catch((e) => {
+                Sentry.captureException(e);
+                console.error(e);
+            });
+        } catch (e) {
+            Sentry.captureException(e);
+            this.removeUser(sourceWatcher, spaceUser.spaceUserId);
+            throw e;
+        }
+    }
+
+    public updateUser(sourceWatcher: SpacesWatcher, spaceUser: SpaceUser, updateMask: string[]) {
+        try {
+            const usersList = this.usersList(sourceWatcher);
+            const user = usersList.get(spaceUser.spaceUserId);
+            if (!user) return;
+
+            if (this.isPublishing(user)) this._nbPublishers--;
+            const oldFilter = this.filterOneUser(user);
+            const updateValues = applyFieldMask(spaceUser, updateMask);
+            merge(user, updateValues);
+            const newFilter = this.filterOneUser(user);
+            usersList.set(spaceUser.spaceUserId, user);
+
+            if (this.isPublishing(user)) this._nbPublishers++;
+            this._nbWatchers = this._nbPublishers > 0 ? this._nbUsers : 0;
+            this._spaceUpdatedSubject.next(this);
+
+            if (!oldFilter && newFilter) {
+                this.notifyWatchers({
+                    $case: "addSpaceUserMessage",
+                    addSpaceUserMessage: AddSpaceUserMessage.fromPartial({
+                        spaceName: this.name,
+                        user,
+                    }),
+                } as any);
+                this.communicationManager.handleUserAdded(user).catch((e) => Sentry.captureException(e));
+            } else if (oldFilter && !newFilter) {
+                this.communicationManager.handleUserDeleted(user).catch((e) => Sentry.captureException(e));
+                this.notifyWatchers({
+                    $case: "removeSpaceUserMessage",
+                    removeSpaceUserMessage: RemoveSpaceUserMessage.fromPartial({
+                        spaceName: this.name,
+                        spaceUserId: user.spaceUserId,
+                    }),
+                } as any);
+            } else if (oldFilter !== false && newFilter !== false) {
+                this.notifyWatchers({
+                    $case: "updateSpaceUserMessage",
+                    updateSpaceUserMessage: {
+                        spaceName: this.name,
+                        user: spaceUser,
+                        updateMask,
+                    },
+                } as any);
+                this.communicationManager.handleUserUpdated(user).catch((e) => Sentry.captureException(e));
+            }
+        } catch (e) {
+            Sentry.captureException(e);
+            this.removeUser(sourceWatcher, spaceUser.spaceUserId);
+        }
+    }
+
+    public removeUser(sourceWatcher: SpacesWatcher, spaceUserId: string) {
+        let user: SpaceUser | undefined;
+        try {
+            const usersList = this.usersList(sourceWatcher);
+            user = usersList.get(spaceUserId);
+            const usersToNotifyList = this.usersListToNotify(sourceWatcher);
+            usersToNotifyList.delete(spaceUserId);
+            if (!user) return;
+            usersList.delete(spaceUserId);
+            if (this.isPublishing(user)) this._nbPublishers--;
+            this._nbUsers--;
+            this._nbWatchers = this._nbPublishers > 0 ? this._nbUsers : 0;
+            this._spaceUpdatedSubject.next(this);
+        } catch (e) { Sentry.captureException(e); }
+        finally {
+            if (user && this.filterOneUser(user)) {
+                this.communicationManager.handleUserDeleted(user).catch((e) => Sentry.captureException(e));
+                this.notifyWatchers({
+                    $case: "removeSpaceUserMessage",
+                    removeSpaceUserMessage: RemoveSpaceUserMessage.fromPartial({
+                        spaceName: this.name,
+                        spaceUserId: spaceUserId,
+                    }),
+                } as any);
+            }
+        }
+    }
+
+    public updateMetadata(watcher: SpacesWatcher, metadata: { [key: string]: unknown }) {
+        for (const key in metadata) { this.metadata.set(key, metadata[key]); }
+        this.notifyWatchers({
+            $case: "updateSpaceMetadataMessage",
+            updateSpaceMetadataMessage: UpdateSpaceMetadataMessage.fromPartial({
+                spaceName: this.name,
+                metadata: JSON.stringify(metadata),
+            }),
+        } as any);
+    }
+
+    private filterOneUser(user: SpaceUser): boolean {
+        if (this._filterType === FilterType.ALL_USERS) return true;
+        if (this._filterType === FilterType.LIVE_STREAMING_USERS) return user.megaphoneState;
+        return false;
+    }
+
+    public addWatcher(watcher: SpacesWatcher) {
+        this.users.set(watcher, new Map<string, SpaceUser>());
+        this.usersToNotify.set(watcher, new Map<string, SpaceUser>());
+        const allSpaceUsers: SpaceUser[] = [];
+        for (const spaceUsers of this.users.values()) {
+            const filteredSpaceUsers = Array.from(spaceUsers.values()).filter((user) => this.filterOneUser(user));
+            allSpaceUsers.push(...filteredSpaceUsers);
+        }
+
+        watcher.write({
+            $case: "initSpaceUsersMessage",
+            initSpaceUsersMessage: { spaceName: this.name, users: allSpaceUsers },
+        } as any);
+
+        const metadata: { [key: string]: unknown } = {};
+        for (const key of this.metadata.keys()) { metadata[key] = this.metadata.get(key); }
+
+        watcher.write({
+            $case: "updateSpaceMetadataMessage",
+            updateSpaceMetadataMessage: UpdateSpaceMetadataMessage.fromPartial({
+                spaceName: this.name,
+                metadata: JSON.stringify(metadata),
+            }),
+        } as any);
+    }
+
+    public removeWatcher(watcher: SpacesWatcher) {
+        const spaceUsers = this.users.get(watcher);
+        if (spaceUsers) {
+            for (const spaceUser of spaceUsers.values()) {
+                this.communicationManager.handleUserDeleted(spaceUser).catch((e) => Sentry.captureException(e));
+            }
+        }
+        this.users.delete(watcher);
+        this.usersToNotify.delete(watcher);
+        for (const spaceUser of spaceUsers?.values() || []) {
+            if (!this.filterOneUser(spaceUser)) continue;
+            this.notifyWatchers({
+                $case: "removeSpaceUserMessage",
+                removeSpaceUserMessage: RemoveSpaceUserMessage.fromPartial({
+                    spaceName: this.name,
+                    spaceUserId: spaceUser.spaceUserId,
+                }),
+            } as any);
+        }
+    }
+
+    public addUserToNotify(sourceWatcher: SpacesWatcher, spaceUser: SpaceUser) {
+        const usersList = this.usersListToNotify(sourceWatcher);
+        usersList.set(spaceUser.spaceUserId, spaceUser);
+        this.communicationManager.handleUserToNotifyAdded(spaceUser).catch((e) => Sentry.captureException(e));
+    }
+
+    public deleteUserToNotify(sourceWatcher: SpacesWatcher, spaceUser: SpaceUser) {
+        const usersList = this.usersListToNotify(sourceWatcher);
+        usersList.delete(spaceUser.spaceUserId);
+        this.communicationManager.handleUserToNotifyDeleted(spaceUser).catch((e) => Sentry.captureException(e));
+    }
+
+    public removeUserFromNotify(watcher: SpacesWatcher, spaceUser: SpaceUser) {
+        this.usersToNotify.delete(watcher);
+    }
+
+    private notifyWatchers(message: BackToPusherSpaceMessage) {
+        for (const watcher_ of this.users.keys()) {
+            watcher_.write(message);
+        }
+    }
+
+    public canBeDeleted(): boolean { return this.users.size === 0; }
+    private usersList(watcher: SpacesWatcher): Map<string, SpaceUser> {
+        const usersList = this.users.get(watcher);
+        if (!usersList) throw new Error("No users list");
+        return usersList;
+    }
+    private usersListToNotify(watcher: SpacesWatcher): Map<string, SpaceUser> {
+        const usersList = this.usersToNotify.get(watcher);
+        if (!usersList) throw new Error("No users list");
+        return usersList;
+    }
+
+    public customJsonReplacer(key: unknown, value: unknown): string | undefined {
+        if (key === "name") return this.name;
+        if (key === "users") return `Users : ${this.users.size}`;
+        return undefined;
+    }
+
+    public dispatchPublicEvent(publicEvent: PublicEvent) {
+        if (!publicEvent.spaceEvent || !(publicEvent.spaceEvent as any).event) {
+            this.notifyWatchers({ $case: "publicEvent", publicEvent } as any);
+            return;
+        }
+        const processedEvent = this.eventProcessor.processPublicEvent((publicEvent.spaceEvent as any).event, publicEvent.senderUserId, this.getAllUsers());
+        const processedPublicEvent: PublicEvent = {
+            ...publicEvent,
+            spaceEvent: { $case: "event", event: processedEvent } as any,
+        };
+        this.notifyWatchers({ $case: "publicEvent", publicEvent: processedPublicEvent } as any);
+    }
+
+    public dispatchPrivateEvent(privateEvent: PrivateEvent) {
+        const sender = this.getAllUsers().find((user) => user.spaceUserId === privateEvent.senderUserId);
+        if (!sender) {
+            if (privateEvent.senderUserId === privateEvent.receiverUserId) return;
+            throw new Error(`Sender not found`);
+        }
+
+        if (!privateEvent.spaceEvent || !(privateEvent.spaceEvent as any).event) {
+            for (const [watcher, users] of this.users.entries()) {
+                if (users.has(privateEvent.receiverUserId)) {
+                    watcher.write({
+                        $case: "privateEvent",
+                        privateEvent: { ...privateEvent, sender },
+                    } as any);
+                }
+            }
+            return;
+        }
+
+        const processedEvent = this.eventProcessor.processPrivateEvent(
+            (privateEvent.spaceEvent as any).event,
+            privateEvent.senderUserId,
+            privateEvent.receiverUserId
+        );
+
+        const processedPrivateEvent: PrivateEvent = {
+            ...privateEvent,
+            spaceEvent: { $case: "event", event: processedEvent } as any,
+        };
+
+        for (const [watcher, users] of this.users.entries()) {
+            if (users.has(privateEvent.receiverUserId)) {
+                watcher.write({
+                    $case: "privateEvent",
+                    privateEvent: { ...processedPrivateEvent, sender },
+                } as any);
+            }
+        }
+    }
+
+    public syncUsersFromPusher(watcher: SpacesWatcher, users: SpaceUser[]) {
+        this.users.set(watcher, new Map<string, SpaceUser>(users.map((user) => [user.spaceUserId, user])));
+    }
+
+    /**
+     * FIXED: Removed '.query' access.
+     * In flattened unions, spaceQueryMessage is the query object itself.
+     */
+    public handleQuery(watcher: SpacesWatcher, spaceQueryMessage: SpaceQueryMessage | any): any {
+        try {
+            // FIXED: Access $case and data directly from spaceQueryMessage
+            const queryCase = spaceQueryMessage.$case;
+
+            switch (queryCase) {
+                case "addSpaceUserQuery": {
+                    const user = spaceQueryMessage.addSpaceUserQuery?.user;
+                    if (!user) throw new Error("No user in addSpaceUserQuery");
+                    
+                    this.addUser(watcher, user);
+                    this._spaceUpdatedSubject.next(this);
+                    
+                    return {
+                        answer: {
+                            $case: "addSpaceUserAnswer",
+                            addSpaceUserAnswer: { spaceName: this.name, spaceUserId: user.spaceUserId },
+                        },
+                    };
+                }
+                case "removeSpaceUserQuery": {
+                    const spaceUserId = spaceQueryMessage.removeSpaceUserQuery?.spaceUserId;
+                    if (!spaceUserId) throw new Error("No spaceUserId in removeSpaceUserQuery");
+                    
+                    this.removeUser(watcher, spaceUserId);
+                    return {
+                        answer: {
+                            $case: "removeSpaceUserAnswer",
+                            removeSpaceUserAnswer: { spaceName: this.name, spaceUserId: spaceUserId },
+                        },
+                    };
+                }
+                default: throw new Error(`Unknown query case: ${queryCase}`);
+            }
+        } catch (e) {
+            return {
+                answer: {
+                    $case: "error",
+                    error: { message: `Error while handling query: ${asError(e).message}` },
+                },
+            };
+        }
+    }
+
+    public get filterType(): Filter { return this._filterType; }
+    public getAllUsers(): SpaceUser[] { return Array.from(this.users.values()).flatMap((users) => Array.from(users.values())); }
+    public getUsersInFilter(): SpaceUser[] { return this.getAllUsers().filter((user) => this.filterOneUser(user)); }
+    public getUsersToNotify(): SpaceUser[] { return Array.from(this.usersToNotify.values()).flatMap((users) => Array.from(users.values())); }
+    public getSpaceName(): string { return this.name; }
+    public getPropertiesToSync(): string[] { return this._propertiesToSync; }
+    private isPublishing(spaceUser: SpaceUser): boolean { return spaceUser.cameraState || spaceUser.microphoneState || spaceUser.screenSharingState; }
+    get nbWatchers(): number { return this._nbWatchers; }
+    get nbUsers(): number { return this._nbUsers; }
+    get nbPublishers(): number { return this._nbPublishers; }
+}

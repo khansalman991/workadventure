@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "types": ["node", "@workadventure/iframe-api-typings"],
+    "allowJs": true,
+    "skipLibCheck": true
+  }
+}

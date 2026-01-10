@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>WorkAdventure (Dev)</title>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+        <base href="/" />
+
+        <script>
+            // This object MUST exist before the game loads
+            window.env = {
+                DEBUG_MODE: true,
+                // Point to the BACKEND, not the frontend. Backend is usually on 8081.
+                API_URL: location.protocol + '//' + location.hostname + ':8081',
+                UPLOADER_URL: location.protocol + '//' + location.hostname + ':8081/uploader',
+                ADMIN_API_URL: location.protocol + '//' + location.hostname + ':8081/admin',
+                // Local map file
+                START_ROOM_URL: '_/global/maps.workadventure.localhost/tests/E2E/empty.json',
+                JITSI_URL: 'meet.jit.si',
+                TURN_SERVER: '',
+                STUN_SERVER: ''
+            };
+            console.log("Environment variables injected:", window.env);
+        </script>
+
+        <style>
+            #cowebsite, #chat-aside { visibility: collapse; }
+            body { margin: 0; background-color: rgb(27, 42, 65); color: white; }
+        </style>
+    </head>
+    
+    <body id="body">
+        <input type="hidden" id="authToken" value="" name="authToken">
+        <input type="hidden" id="matrixLoginToken" value="" name="matrixLoginToken">
+        
+        <div id="app"></div>
+        
+        <script type="module" src="/src/svelte.ts"></script>
+    </body>
+</html>
