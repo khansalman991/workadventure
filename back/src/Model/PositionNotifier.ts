@@ -25,7 +25,7 @@ import type {
 import { Zone } from "./Zone";
 import type { Group } from "./Group";
 
-interface ZoneDescriptor {
+export interface ZoneDescriptor {
     i: number;
     j: number;
 }

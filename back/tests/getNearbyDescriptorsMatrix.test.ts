@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { getNearbyDescriptorsMatrix } from "../src/Model/PositionNotifier";
+/** * FIXED: Imported ZoneDescriptor to type the matrix correctly 
+ */
+import { getNearbyDescriptorsMatrix, type ZoneDescriptor } from "../src/Model/PositionNotifier";
 
 describe("getNearbyDescriptorsMatrix", () => {
     it("should create a matrix of coordinates in a square around the parameter", () => {
-        const matrix = [];
+        // FIXED: Added type definition to avoid 'never' error
+        const matrix: ZoneDescriptor[] = []; 
         for (const d of getNearbyDescriptorsMatrix({ i: 1, j: 1 })) {
             matrix.push(d);
         }
@@ -22,7 +25,8 @@ describe("getNearbyDescriptorsMatrix", () => {
     });
 
     it("should create a matrix of coordinates in a square around the parameter bis", () => {
-        const matrix = [];
+        // FIXED: Added type definition
+        const matrix: ZoneDescriptor[] = []; 
         for (const d of getNearbyDescriptorsMatrix({ i: 8, j: 3 })) {
             matrix.push(d);
         }
@@ -41,7 +45,8 @@ describe("getNearbyDescriptorsMatrix", () => {
     });
 
     it("should not create a matrix with negative coordinates", () => {
-        const matrix = [];
+        // FIXED: Added type definition
+        const matrix: ZoneDescriptor[] = []; 
         for (const d of getNearbyDescriptorsMatrix({ i: 0, j: 0 })) {
             matrix.push(d);
         }
@@ -54,7 +59,7 @@ describe("getNearbyDescriptorsMatrix", () => {
         ]);
     });
 
-    /*it("should not create a matrix with coordinates bigger than its dimmensions", () => {
+    /*it("should not create a matrix with coordinates bigger than its dimensions", () => {
         const matrix = getNearbyDescriptorsMatrix({i: 4, j: 4}, 5, 5);
 
         expect(matrix).toEqual([

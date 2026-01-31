@@ -1,21 +1,28 @@
 #!/usr/bin/env tsx
 
 import { readFileSync } from "fs";
-import { resolve, dirname } from "path";
+import { resolve, join } from "path";
 import { fileURLToPath } from "url";
 import { extractEnvVariables } from "./extractor.js";
 import { generateMarkdown } from "./markdown-generator.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Use a safer way to define __dirname that works in tsx ESM mode
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 async function main() {
     console.log("🔍 Checking environment variables documentation...");
 
-    // Import the validator modules
-    const playModule = await import("../../../../play/src/pusher/enums/EnvironmentVariableValidator.js");
-    const backModule = await import("../../../../back/src/Enum/EnvironmentVariableValidator.js");
-    const mapStorageModule = await import("../../../../map-storage/src/Enum/EnvironmentVariableValidator.js");
+    // Path to the root of the metaverse repository
+    const projectRoot = resolve(__dirname, "../../../../");
+
+    /**
+     * FIX: Dynamic imports of external validators.
+     * We use the absolute path to ensure TypeScript doesn't try to 
+     * include these in the 'src' rootDir of the tool.
+     */
+    const playModule = await import(join(projectRoot, "play/src/pusher/enums/EnvironmentVariableValidator.js"));
+    const backModule = await import(join(projectRoot, "back/src/Enum/EnvironmentVariableValidator.js"));
+    const mapStorageModule = await import(join(projectRoot, "map-storage/src/Enum/EnvironmentVariableValidator.js"));
 
     // Extract variables
     const playVars = extractEnvVariables(playModule.EnvironmentVariables);
@@ -26,7 +33,7 @@ async function main() {
     const expectedMarkdown = generateMarkdown(playVars, backVars, mapStorageVars);
 
     // Read current documentation
-    const docPath = resolve(__dirname, "../../../../docs/others/self-hosting/env-variables.md");
+    const docPath = resolve(projectRoot, "docs/others/self-hosting/env-variables.md");
     let currentMarkdown: string;
 
     try {

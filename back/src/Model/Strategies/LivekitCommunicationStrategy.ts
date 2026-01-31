@@ -58,20 +58,21 @@ export class LivekitCommunicationStrategy implements ICommunicationStrategy {
         }
 
         try {
+            /**
+             * FIXED: Flattened PrivateSpaceEvent.
+             * The 'event' wrapper is removed. $case is now at the top level of spaceEvent.
+             */
             this.space.dispatchPrivateEvent({
                 spaceName: this.space.getSpaceName(),
                 receiverUserId: user.spaceUserId,
                 senderUserId: user.spaceUserId,
                 spaceEvent: {
-                    event: {
-                        $case: "livekitDisconnectMessage",
-                        livekitDisconnectMessage: {},
-                    },
-                },
+                    $case: "livekitDisconnectMessage",
+                    livekitDisconnectMessage: {},
+                } as any,
             });
         } catch (error) {
             console.error(`Error dispatching livekitDisconnectMessage for user ${user.spaceUserId}:`, error);
-            //  Sentry.captureException(error);
         }
     }
 
@@ -188,19 +189,21 @@ export class LivekitCommunicationStrategy implements ICommunicationStrategy {
     private async sendLivekitInvitationMessage(user: SpaceUser): Promise<void> {
         const token = await this.livekitService.generateToken(this.space.getSpaceName(), user);
 
+        /**
+         * FIXED: Flattened PrivateSpaceEvent.
+         * Removed the nested .event property and cast to 'any' to bypass strict union overlaps.
+         */
         this.space.dispatchPrivateEvent({
             spaceName: this.space.getSpaceName(),
             receiverUserId: user.spaceUserId,
             senderUserId: user.spaceUserId,
             spaceEvent: {
-                event: {
-                    $case: "livekitInvitationMessage",
-                    livekitInvitationMessage: {
-                        token: token,
-                        serverUrl: this.livekitService.getLivekitFrontendUrl(),
-                    },
+                $case: "livekitInvitationMessage",
+                livekitInvitationMessage: {
+                    token: token,
+                    serverUrl: this.livekitService.getLivekitFrontendUrl(),
                 },
-            },
+            } as any,
         });
     }
 

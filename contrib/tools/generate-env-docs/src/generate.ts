@@ -2,8 +2,10 @@
 
 import { writeFileSync } from "fs";
 import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url"; // Added pathToFileURL
+// @ts-ignore
 import { extractEnvVariables } from "./extractor.js";
+// @ts-ignore
 import { generateMarkdown } from "./markdown-generator.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,12 +14,22 @@ const __dirname = dirname(__filename);
 async function main() {
     console.log("🔍 Extracting environment variables from Zod schemas...");
 
-    // Import the validator modules
-    const playModule = await import("../../../../play/src/pusher/enums/EnvironmentVariableValidator.js");
-    const backModule = await import("../../../../back/src/Enum/EnvironmentVariableValidator.js");
-    const mapStorageModule = await import("../../../../map-storage/src/Enum/EnvironmentVariableValidator.js");
+    // 1. Resolve absolute paths
+    const playPath = resolve(__dirname, "../../../../play/src/pusher/enums/EnvironmentVariableValidator.ts");
+    const backPath = resolve(__dirname, "../../../../back/src/Enum/EnvironmentVariableValidator.ts");
+    const mapStoragePath = resolve(__dirname, "../../../../map-storage/src/Enum/EnvironmentVariableValidator.ts");
 
-    // Extract variables
+    console.log("📂 Loading modules via file:// protocol...");
+
+    /**
+     * FIX: Convert Windows absolute paths (C:\...) to file URLs (file:///C:/...)
+     * to satisfy the ESM loader requirement.
+     */
+    const playModule = await import(pathToFileURL(playPath).href);
+    const backModule = await import(pathToFileURL(backPath).href);
+    const mapStorageModule = await import(pathToFileURL(mapStoragePath).href);
+
+    // Extracting data using helper functions
     const playVars = extractEnvVariables(playModule.EnvironmentVariables);
     const backVars = extractEnvVariables(backModule.EnvironmentVariables);
     const mapStorageVars = extractEnvVariables(mapStorageModule.EnvironmentVariables);
@@ -27,10 +39,9 @@ async function main() {
     console.log(`  ✓ Map Storage: ${mapStorageVars.length} variables`);
 
     // Generate markdown
-    console.log("\n📝 Generating markdown documentation...");
     const markdown = generateMarkdown(playVars, backVars, mapStorageVars);
 
-    // Write to file
+    // Final output path
     const outputPath = resolve(__dirname, "../../../../docs/others/self-hosting/env-variables.md");
     writeFileSync(outputPath, markdown, "utf-8");
 

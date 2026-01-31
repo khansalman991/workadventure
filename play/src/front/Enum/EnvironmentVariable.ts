@@ -9,12 +9,12 @@ declare global {
 
 const env = window.env;
 
-// --- START OF FIX: HARDCODED PORTS ---
-// We strictly enforce port 8081 and the correct protocols (ws:// for Pusher, http:// for API)
-export const PUSHER_URL = "http://localhost:8081";
-export const API_URL = "http://localhost:8081";
-export const ADMIN_URL = "http://localhost:8081/admin";
-export const UPLOADER_URL = "http://localhost:8081/uploader";
+// --- FIXED: HARDCODED IPS ---
+// We use your network IP 192.168.0.111 because localhost is not working on your machine.
+export const PUSHER_URL = "http://192.168.0.111:8081";
+export const API_URL = "http://192.168.0.111:8081";
+export const ADMIN_URL = "http://192.168.0.111:8081/admin";
+export const UPLOADER_URL = "http://192.168.0.111:8081/uploader";
 // --- END OF FIX ---
 
 export const DEBUG_MODE = env.DEBUG_MODE;
@@ -45,8 +45,8 @@ export const PEER_VIDEO_RECOMMENDED_BANDWIDTH = env.PEER_VIDEO_RECOMMENDED_BANDW
 export const PEER_SCREEN_SHARE_LOW_BANDWIDTH = env.PEER_SCREEN_SHARE_LOW_BANDWIDTH;
 export const PEER_SCREEN_SHARE_RECOMMENDED_BANDWIDTH = env.PEER_SCREEN_SHARE_RECOMMENDED_BANDWIDTH;
 
-export const POSITION_DELAY = 200; // Wait 200ms between sending position events
-export const MAX_EXTRAPOLATION_TIME = 100; // Extrapolate a maximum of 250ms if no new movement is sent by the player
+export const POSITION_DELAY = 200; 
+export const MAX_EXTRAPOLATION_TIME = 100; 
 
 export const SENTRY_DSN_FRONT = env.SENTRY_DSN_FRONT;
 export const SENTRY_ENVIRONMENT = env.SENTRY_ENVIRONMENT;
@@ -80,13 +80,10 @@ export const MATRIX_ADMIN_USER = env.MATRIX_ADMIN_USER;
 export const MATRIX_DOMAIN = env.MATRIX_DOMAIN;
 
 export const ENABLE_CHAT = env.ENABLE_CHAT;
-
 export const ENABLE_CHAT_ONLINE_LIST = env.ENABLE_CHAT_ONLINE_LIST;
-
 export const ENABLE_CHAT_DISCONNECTED_LIST = env.ENABLE_CHAT_DISCONNECTED_LIST;
 export const ENABLE_SAY = env.ENABLE_SAY;
 export const ENABLE_ISSUE_REPORT = env.ENABLE_ISSUE_REPORT;
 
 export const GRPC_MAX_MESSAGE_SIZE = env.GRPC_MAX_MESSAGE_SIZE;
-
 export const BACKGROUND_TRANSFORMER_ENGINE = env.BACKGROUND_TRANSFORMER_ENGINE;

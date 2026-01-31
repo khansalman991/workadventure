@@ -1,11 +1,12 @@
 // This is your blueprint for the database
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated" // This tells Prisma where to put the files
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // The 'url' property is removed from here in version 7
 }
 
 // Minimal Table for WorkAdventure to start
@@ -17,7 +18,7 @@ model User {
 }
 
 model Room {
-  id          Int     @id @default(autoincrement())
-  roomUrl     String  @unique
-  isPublic    Boolean @default(true)
+  id       Int     @id @default(autoincrement())
+  roomUrl  String  @unique
+  isPublic Boolean @default(true)
 }

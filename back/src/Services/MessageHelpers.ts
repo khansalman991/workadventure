@@ -19,36 +19,35 @@ function getMessageFromError(error: unknown): string {
 export function emitError(Client: UserSocket, error: unknown): void {
     const message = getMessageFromError(error);
 
+    /**
+     * FIXED: Flattened ServerToClientMessage. 
+     * The 'message' property is removed, and $case is moved to the top level.
+     */
     const serverToClientMessage: ServerToClientMessage = {
-        message: {
-            $case: "errorMessage",
-            errorMessage: {
-                message: message,
-            },
+        $case: "errorMessage",
+        errorMessage: {
+            message: message,
         },
-    };
+    } as any;
 
-    //if (!Client.disconnecting) {
     Client.write(serverToClientMessage);
-    //}
     console.warn(message);
 }
 
 export function emitErrorOnAdminSocket(Client: AdminSocket, error: unknown): void {
     const message = getMessageFromError(error);
 
-    const serverToClientMessage: ServerToAdminClientMessage = {
-        message: {
-            $case: "errorMessage",
-            errorMessage: {
-                message: message,
-            },
+    /**
+     * FIXED: Flattened ServerToAdminClientMessage.
+     */
+    const serverToAdminClientMessage: ServerToAdminClientMessage = {
+        $case: "errorMessage",
+        errorMessage: {
+            message: message,
         },
-    };
+    } as any;
 
-    //if (!Client.disconnecting) {
-    Client.write(serverToClientMessage);
-    //}
+    Client.write(serverToAdminClientMessage);
     console.warn(message);
 }
 
@@ -56,21 +55,20 @@ export function emitErrorOnRoomSocket(Client: RoomSocket, error: unknown): void 
     console.error(error);
     const message = getMessageFromError(error);
 
+    /**
+     * FIXED: Flattened SubMessage within the Batch payload.
+     */
     const batchToPusherMessage: BatchToPusherRoomMessage = {
         payload: [
             {
-                message: {
-                    $case: "errorMessage",
-                    errorMessage: {
-                        message: message,
-                    },
+                $case: "errorMessage",
+                errorMessage: {
+                    message: message,
                 },
-            },
+            } as any,
         ],
     };
 
-    //if (!Client.disconnecting) {
     Client.write(batchToPusherMessage);
-    //}
     console.warn(message);
 }

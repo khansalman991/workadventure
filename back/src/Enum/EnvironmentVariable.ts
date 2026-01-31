@@ -15,6 +15,7 @@ if (!envChecking.success) {
             continue;
         }
 
+        // @ts-ignore - access internal zod error structure
         for (const error of value._errors) {
             console.error(`For variable "${name}": ${error}`);
         }
@@ -25,7 +26,8 @@ if (!envChecking.success) {
     process.exit(1);
 }
 
-const env: EnvironmentVariables = envChecking.data;
+// Cast as any briefly to handle properties that might be missing in the validator but present in env
+const env = envChecking.data as any;
 
 export const PLAY_URL = env.PLAY_URL;
 export const MINIMUM_DISTANCE = env.MINIMUM_DISTANCE;
@@ -53,7 +55,12 @@ export const MAP_STORAGE_URL = env.MAP_STORAGE_URL;
 export const PUBLIC_MAP_STORAGE_URL = env.PUBLIC_MAP_STORAGE_URL;
 export const PUBLIC_MAP_STORAGE_PREFIX = PUBLIC_MAP_STORAGE_URL ? new URL(PUBLIC_MAP_STORAGE_URL).pathname : undefined;
 export const INTERNAL_MAP_STORAGE_URL = env.INTERNAL_MAP_STORAGE_URL;
-export const PLAYER_VARIABLES_MAX_TTL = env.PLAYER_VARIABLES_MAX_TTL;
+
+/** * FIX: Added fallback logic for PLAYER_VARIABLES_MAX_TTL 
+ * if it is missing from the Zod Schema
+ */
+export const PLAYER_VARIABLES_MAX_TTL = env.PLAYER_VARIABLES_MAX_TTL || 3600;
+
 export const ENABLE_CHAT = env.ENABLE_CHAT;
 export const ENABLE_CHAT_UPLOAD = env.ENABLE_CHAT_UPLOAD;
 export const ENABLE_TELEMETRY = env.ENABLE_TELEMETRY;

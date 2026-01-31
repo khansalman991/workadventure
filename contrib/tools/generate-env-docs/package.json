@@ -1,5 +1,6 @@
 {
   "name": "@workadventure/generate-env-docs",
+  "type": "module",
   "version": "1.0.0",
   "private": true,
   "description": "Generate environment variables documentation from Zod schemas",

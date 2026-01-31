@@ -16,20 +16,27 @@ describe("SpacesWatcher", () => {
                 eventsWatcher.push(chunk);
                 return true;
             },
-            end(): ReturnType<Writable["end"]> extends Writable ? SpaceSocket : void {
+            end(): any {
                 isClosed = true;
                 return mock<SpaceSocket>();
             },
         });
 
         const watcher = new SpacesWatcher("uuid-watcher", spaceSocketToPusher, 0);
-        expect(eventsWatcher.some((message) => message?.message?.$case === "pingMessage")).toBe(true);
+
+        /**
+         * FIXED: Removed .message wrapper.
+         * Accessing $case directly on the message object.
+         */
+        expect(eventsWatcher.some((message: any) => message?.$case === "pingMessage")).toBe(true);
+        
         await new Promise((resolve) => {
             setTimeout(resolve, 5);
         });
 
         expect(isClosed).toBe(true);
     });
+
     it("should add/remove space to watcher", () => {
         const spaceSocketToPusher = mock<SpaceSocket>();
         const watcher = new SpacesWatcher("uuid-watcher", spaceSocketToPusher);
@@ -39,12 +46,16 @@ describe("SpacesWatcher", () => {
         watcher.unwatchSpace("test-spaces-watcher");
         expect(watcher.spacesWatched).not.toContain("test-spaces-watcher");
     });
+
     it("should not close the socket because pong was received to the ping", async () => {
         // eslint-disable-next-line prefer-const
         let watcher: SpacesWatcher;
         const spaceSocketToPusher = mock<SpaceSocket>({
             write(chunk: BackToPusherSpaceMessage): boolean {
-                if (chunk?.message?.$case === "pingMessage") {
+                /**
+                 * FIXED: Removed .message wrapper.
+                 */
+                if ((chunk as any)?.$case === "pingMessage") {
                     setTimeout(() => watcher?.clearPongTimeout(), 0);
                 }
                 return true;
@@ -53,7 +64,10 @@ describe("SpacesWatcher", () => {
 
         watcher = new SpacesWatcher("uuid-watcher", spaceSocketToPusher, 0.1);
         let isClosed = false;
-        spaceSocketToPusher.on("end", () => (isClosed = true));
+        
+        // Setup listener to track closure
+        (spaceSocketToPusher.on as any)("end", () => (isClosed = true));
+        
         await new Promise((resolve) => {
             setTimeout(resolve, 300);
         });

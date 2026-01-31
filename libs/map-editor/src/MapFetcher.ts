@@ -36,7 +36,7 @@ class MapFetcher {
         try {
             const result = await this.fetchFile(wamUrl, true, true, internalMapStorageUrl, stripPrefix);
             const parseResult = WAMFileFormat.safeParse(wamFileMigration.migrate(result.data));
-            if (!parseResult) {
+            if (!parseResult.success) {
                 throw new LocalUrlError(`Invalid wam file format for: ${wamUrl}`);
             }
             return result.data as WAMFileFormat;
@@ -54,14 +54,11 @@ class MapFetcher {
         stripPrefix: string | undefined = undefined
     ): Promise<ITiledMap> {
         const url = await this.getMapUrl(mapUrl, wamUrl, internalMapStorageUrl, stripPrefix);
-        // Before trying to make the query, let's verify the map is actually on the open internet (and not a local test map)
-
+        
         const res = await this.fetchFile(url, canLoadLocalUrl, storeVariableForLocalMaps);
 
         const parseResult = ITiledMap.safeParse(res.data);
         if (!parseResult.success) {
-            //TODO fixme
-            //throw new Error("Invalid map format for map " + mapUrl);
             console.error("Invalid map format for map '" + url + "':", parseResult.error);
         }
 
@@ -75,13 +72,6 @@ class MapFetcher {
         internalUrl: string | undefined = undefined,
         stripPrefix: string | undefined = undefined
     ) {
-        // Note: mapUrl is provided by the client. A possible attack vector would be to use a rogue DNS server that
-        // returns local URLs. Alas, Axios cannot pin a URL to a given IP. So "isLocalUrl" and axios.get could potentially
-        // target to different servers (and one could trick axios.get into loading resources on the internal network
-        // despite isLocalUrl checking that).
-        // We can deem this problem not that important because:
-        // - We make sure we are only passing "GET" requests
-        // - The result of the query is never displayed to the end user
         if (
             internalUrl === undefined &&
             (await this.isLocalUrl(url)) &&
@@ -93,9 +83,6 @@ class MapFetcher {
 
         const headers: Record<string, string> = {};
         if (internalUrl) {
-            // Let's rewrite the request to hit the internal URL instead. We will use the X-Forwarded-Host header to
-            // tell the map-storage the real domain name.
-
             const urlObj = new URL(url, internalUrl);
             const domainUrl = urlObj.host;
 
@@ -106,23 +93,16 @@ class MapFetcher {
                 path = path.substring(stripPrefix.length);
             }
 
-            // Rewrite the URL to use the internalUrl instead
             url = internalUrl + path + urlObj.search;
         }
 
         return await axios.get<unknown>(url, {
-            maxContentLength: 50 * 1024 * 1024, // Max content length: 50MB. Maps should not be bigger
-            timeout: 10000, // Timeout after 10 seconds
+            maxContentLength: 50 * 1024 * 1024,
+            timeout: 10000,
             headers,
         });
     }
 
-    /**
-     * Returns true if the domain name is localhost of *.localhost
-     * Returns true if the domain name resolves to an IP address that is "private" (like 10.x.x.x or 192.168.x.x)
-     *
-     * @private
-     */
     async isLocalUrl(url: string): Promise<boolean> {
         if (
             [
@@ -131,8 +111,6 @@ class MapFetcher {
                 "http://play.workadventure.localhost/~/maps/areas.wam",
             ].includes(url)
         ) {
-            // This is an ugly exception case needed for the E2E test at "tests/tests/variables.spec.ts"
-            // Otherwise, we cannot test locally maps that are... not local.
             return false;
         }
 
@@ -141,7 +119,9 @@ class MapFetcher {
             return true;
         }
 
-        let addresses = [];
+        // FIXED: Explicitly type the array to avoid 'never[]' inference
+        let addresses: string[] = []; 
+        
         if (urlObj.hostname.startsWith("[") && urlObj.hostname.endsWith("]")) {
             addresses = [urlObj.hostname.slice(1, -1)];
         } else if (!ipaddr.isValid(urlObj.hostname)) {

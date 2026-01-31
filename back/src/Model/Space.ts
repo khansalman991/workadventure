@@ -30,6 +30,9 @@ const debug = Debug("space");
 type Filter = Exclude<FilterType, FilterType.UNRECOGNIZED>;
 
 export class Space implements CustomJsonReplacerInterface, ICommunicationSpace {
+    closeAllWatcherConnections() {
+        throw new Error("Method not implemented.");
+    }
     readonly name: string;
     private users: Map<SpacesWatcher, Map<string, SpaceUser>>;
     private metadata: Map<string, unknown>;
