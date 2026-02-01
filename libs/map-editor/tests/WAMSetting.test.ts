@@ -9,25 +9,32 @@ describe("WAM Setting", () => {
         areas: [],
         entityCollections: [],
     };
+
     const dataToModify = {
         enabled: true,
         title: "testTitle",
         rights: ["testRights"],
         scope: "testScope",
     };
+
     it("should change WAM file loaded when WAMSettingCommand received", async () => {
         const wamFile: WAMFileFormat = { ...defaultWamFile };
+
+        /**
+         * FIX: The command expects the UpdateWAMSettingsMessage object directly.
+         * Based on your error code 2353, we remove both the 'message' wrapper 
+         * AND the '$case' property.
+         */
         const command = new UpdateWAMSettingCommand(
             wamFile,
             {
-                message: {
-                    $case: "updateMegaphoneSettingMessage",
-                    updateMegaphoneSettingMessage: dataToModify,
-                },
+                updateMegaphoneSettingMessage: dataToModify,
             },
             "test-uuid"
         );
+
         await command.execute();
+
         expect(wamFile.settings).toBeDefined();
         if (wamFile.settings) {
             expect(wamFile.settings.megaphone).toBeDefined();
@@ -39,12 +46,5 @@ describe("WAM Setting", () => {
         } else {
             assert.fail("wamFile.settings is not defined");
         }
-        /*expect(result.type).toBe("UpdateWAMSettingCommand");
-        if (result.type === "UpdateWAMSettingCommand") {
-            expect(result.name).toBe("megaphone");
-            expect(result.dataToModify).toEqual(dataToModify);
-        } else {
-            assert.fail("result.type is not UpdateWAMSettingCommand");
-        }*/
     });
 });

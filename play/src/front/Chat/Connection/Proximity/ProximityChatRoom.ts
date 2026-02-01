@@ -7,7 +7,8 @@ import type { Subscription } from "rxjs";
 import type { CharacterTextureMessage } from "@workadventure/messages";
 import { AvailabilityStatus, FilterType } from "@workadventure/messages";
 import { ChatMessageTypes } from "@workadventure/shared-utils";
-import { asError } from "catch-unknown";
+import * as catchUnknown from "catch-unknown";
+const asError = catchUnknown.asError;
 import { eventToAbortReason } from "@workadventure/shared-utils/src/Abort/raceAbort";
 import { AbortError } from "@workadventure/shared-utils/src/Abort/AbortError";
 import type {

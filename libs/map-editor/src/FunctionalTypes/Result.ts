@@ -1,4 +1,5 @@
-import { asError } from "catch-unknown";
+import * as catchUnknown from "catch-unknown";
+const asError = catchUnknown.asError;
 
 export type Success<T> = { ok: true; value: T };
 export type Failure<E> = { ok: false; error: E };

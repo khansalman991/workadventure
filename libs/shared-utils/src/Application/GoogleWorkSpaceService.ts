@@ -1,4 +1,5 @@
-import { asError } from "catch-unknown";
+import * as catchUnknown from "catch-unknown";
+const asError = catchUnknown.asError;
 import {
     GoogleDocsException,
     GoogleDriveException,

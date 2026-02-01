@@ -1,0 +1,53 @@
+{
+    "compilerOptions": {
+        "forceConsistentCasingInFileNames": true,
+        "moduleResolution": "node",
+        "strict": true,
+        "declaration": true,
+        "module": "commonjs",
+        "sourceMap": true,
+        "types": [
+            "node"
+        ],
+        /* Allows TypeScript to look "up and out" to see the 
+           'room-api-clients' folder sitting above 'messages'.
+        */
+        "rootDir": "../../",
+        /* Treats the local src and the sibling room-api-clients 
+           as part of the same project structure.
+        */
+        "rootDirs": [
+            "./src",
+            "../room-api-clients"
+        ],
+        "outDir": "./dist",
+        "target": "es2019",
+        "esModuleInterop": true,
+        "composite": true,
+        "lib": [
+            "es2019",
+            "dom"
+        ],
+        "skipLibCheck": true,
+        "baseUrl": ".",
+        "paths": {
+            "*": [
+                "node_modules/*",
+                "../../node_modules/*"
+            ]
+        }
+    },
+    "include": [
+        "src/**/*.ts",
+        "src/ts-proto-generated/**/*.ts",
+        /* CRITICAL: This allows the compiler to legally access the 
+           manual protobuf files you moved to the parent folder.
+        */
+        "../room-api-clients/google/protobuf/*.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "../../node_modules",
+        "dist"
+    ]
+}

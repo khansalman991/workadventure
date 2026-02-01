@@ -1,0 +1,42 @@
+import { z } from "zod";
+export declare const isApplicationDefinitionInterface: z.ZodObject<{
+    name: z.ZodString;
+    script: z.ZodOptional<z.ZodString>;
+    doc: z.ZodOptional<z.ZodString>;
+    image: z.ZodOptional<z.ZodString>;
+    description: z.ZodOptional<z.ZodString>;
+    enabled: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    regexUrl: z.ZodOptional<z.ZodString>;
+    targetUrl: z.ZodOptional<z.ZodString>;
+    default: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    forceNewTab: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    allowAPI: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    policy: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    name: string;
+    enabled: boolean;
+    default: boolean;
+    forceNewTab: boolean;
+    allowAPI: boolean;
+    script?: string | undefined;
+    doc?: string | undefined;
+    image?: string | undefined;
+    description?: string | undefined;
+    regexUrl?: string | undefined;
+    targetUrl?: string | undefined;
+    policy?: string | undefined;
+}, {
+    name: string;
+    script?: string | undefined;
+    doc?: string | undefined;
+    image?: string | undefined;
+    description?: string | undefined;
+    enabled?: boolean | undefined;
+    regexUrl?: string | undefined;
+    targetUrl?: string | undefined;
+    default?: boolean | undefined;
+    forceNewTab?: boolean | undefined;
+    allowAPI?: boolean | undefined;
+    policy?: string | undefined;
+}>;
+export type ApplicationDefinitionInterface = z.infer<typeof isApplicationDefinitionInterface>;

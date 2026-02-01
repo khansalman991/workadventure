@@ -1,0 +1,33 @@
+{
+  "name": "workadventure-artillery",
+  "version": "1.0.0",
+  "description": "Load testing for WorkAdventure",
+  "scripts": {
+    "start": "ts-node ./index.ts"
+  },
+  "contributors": [
+    {
+      "name": "Grégoire Parant",
+      "email": "g.parant@thecodingmachine.com"
+    },
+    {
+      "name": "David Négrier",
+      "email": "d.negrier@thecodingmachine.com"
+    },
+    {
+      "name": "Arthmaël Poly",
+      "email": "a.poly@thecodingmachine.com"
+    }
+  ],
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "dependencies": {
+    "@types/ws": "^7.2.6",
+    "@workadventure/messages": "^1.0.0",
+    "axios": "^1.13.2",
+    "rxjs": "^7.8.2",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^1.0.0-pre.62",
+    "typescript": "^5.9.3",
+    "ws": "^7.5.10"
+  }
+}

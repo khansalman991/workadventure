@@ -19,7 +19,8 @@ import type {
 import { isMapDetailsData, RefreshRoomMessage, VariableWithTagMessage } from "@workadventure/messages";
 import { Jitsi } from "@workadventure/shared-utils";
 import type { ITiledMap, ITiledMapProperty, Json } from "@workadventure/tiled-map-type-guard";
-import { asError } from "catch-unknown";
+import * as catchUnknown from "catch-unknown";
+const asError = catchUnknown.asError;
 import {
     ADMIN_API_URL,
     BBB_SECRET,

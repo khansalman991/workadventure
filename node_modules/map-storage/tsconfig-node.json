@@ -1,0 +1,36 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "module": "commonjs",
+        "outDir": "./dist",
+        /* FIXED: rootDir and baseUrl must point one level up to see sibling 'libs' */
+        "rootDir": "../",
+        "baseUrl": "../",
+        "strict": true,
+        "noImplicitThis": false,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "moduleResolution": "node",
+        "resolveJsonModule": true,
+        /* FIXED: Runtime path aliases to resolve the 'require' calls in compiled JS */
+        "paths": {
+  "@workadventure/messages": ["libs/messages/src"],
+  "@workadventure/map-editor": ["libs/map-editor/src"],
+  "../../../room-api-clients/google/protobuf/*": ["libs/room-api-clients/google/protobuf/*"]
+},
+        "esModuleInterop": true,
+        "sourceRoot": "/",
+        "inlineSources": true,
+        "forceConsistentCasingInFileNames": true,
+        "skipLibCheck": true
+    },
+    "include": [
+        "src/**/*.ts",
+        "../libs/room-api-clients/google/protobuf/*.ts"
+    ],
+    "exclude": [
+        "./src-ui",
+        "./eslint.config.mjs",
+        "node_modules"
+    ]
+}

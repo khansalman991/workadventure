@@ -11,7 +11,8 @@ import { throttle } from "throttle-debounce";
 import { ForwardableStore, MapStore } from "@workadventure/store-utils";
 import { MathUtils } from "@workadventure/math-utils";
 import CancelablePromise from "cancelable-promise";
-import { Deferred } from "ts-deferred";
+import * as DeferredModule from "ts-deferred";
+const Deferred = DeferredModule.Deferred;
 import type { GroupUsersUpdateMessage } from "@workadventure/messages";
 import {
     AvailabilityStatus,
@@ -283,11 +284,11 @@ export class GameScene extends DirtyScene {
     public readonly superLoad: SuperLoaderPlugin;
     private initPosition?: PositionInterface;
     private playersPositionInterpolator = new PlayersPositionInterpolator();
-    private connectionAnswerPromiseDeferred: Deferred<RoomJoinedMessageInterface>;
+    private connectionAnswerPromiseDeferred: DeferredModule.Deferred<RoomJoinedMessageInterface>;
     // A promise that will resolve when the "create" method is called (signaling loading is ended)
-    private createPromiseDeferred: Deferred<void>;
+    private createPromiseDeferred: DeferredModule.Deferred<void>;
     // A promise that will resolve when the scene is ready to start (all assets have been loaded and the connection to the room is established)
-    private sceneReadyToStartDeferred: Deferred<void> = new Deferred<void>();
+    private sceneReadyToStartDeferred: DeferredModule.Deferred<void> = new DeferredModule.Deferred<void>();
     private iframeSubscriptionList: Array<Subscription> = [];
     private gameMapChangedSubscription!: Subscription;
     private messageSubscription: Subscription | null = null;
@@ -307,7 +308,7 @@ export class GameScene extends DirtyScene {
     private peerStoreUnsubscriber!: Unsubscriber;
     private unsubscribers: Unsubscriber[] = [];
     private entityPermissions: EntityPermissions | undefined;
-    private entityPermissionsDeferred: Deferred<EntityPermissions> = new Deferred();
+    private entityPermissionsDeferred: DeferredModule.Deferred<EntityPermissions> = new Deferred();
     private gameMapFrontWrapper!: GameMapFrontWrapper;
     private actionableItems: Map<number, ActionableItem> = new Map<number, ActionableItem>();
     private isReconnecting: boolean | undefined = undefined;
@@ -370,7 +371,7 @@ export class GameScene extends DirtyScene {
     private allUserSpace: SpaceInterface | undefined;
     private isLiveStreamingUnsubscriber: Unsubscriber | undefined;
     private _proximityChatRoom: ProximityChatRoom | undefined;
-    private _userProviderMergerDeferred: Deferred<UserProviderMerger> = new Deferred();
+    private _userProviderMergerDeferred: DeferredModule.Deferred<UserProviderMerger> = new Deferred();
     private _worldUserCounter: ForwardableStore<number> = new ForwardableStore(0);
     public extensionModule: ExtensionModule | undefined = undefined;
     public landingAreas: AreaData[] = [];
@@ -378,7 +379,7 @@ export class GameScene extends DirtyScene {
     private onPlayerMovementEndedCallbacks: Array<(event: HasPlayerMovedInterface) => void> = [];
 
     public _chatConnection: ChatConnectionInterface | undefined;
-    private _proximityChatRoomDeferred: Deferred<ProximityChatRoom> = new Deferred();
+    private _proximityChatRoomDeferred: DeferredModule.Deferred<ProximityChatRoom> = new Deferred();
     private _focusFx: DarkenOutsideAreaEffect | undefined;
     private abortController: AbortController = new AbortController();
 

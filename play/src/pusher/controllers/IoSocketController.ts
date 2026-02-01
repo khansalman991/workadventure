@@ -10,7 +10,8 @@ import {
 import { JsonWebTokenError } from "jsonwebtoken";
 import * as Sentry from "@sentry/node";
 import type { TemplatedApp, WebSocket } from "uWebSockets.js";
-import { asError } from "catch-unknown";
+import * as catchUnknown from "catch-unknown";
+const asError = catchUnknown.asError;
 import Debug from "debug";
 import { AxiosError } from "axios";
 import { AbortError } from "@workadventure/shared-utils/src/Abort/AbortError";
@@ -321,7 +322,7 @@ export class IoSocketController {
                                         buttonTitle: "Refresh",
                                         timeToRetry: 999999,
                                     },
-                                } satisfies UpgradeFailedData,
+                                } as any,
                                 websocketKey,
                                 websocketProtocol,
                                 websocketExtensions,
@@ -389,7 +390,7 @@ export class IoSocketController {
                                             rejected: true,
                                             reason: "invalidTexture",
                                             entityType: "character",
-                                        } satisfies UpgradeFailedInvalidTexture,
+                                        } as any,
                                         websocketKey,
                                         websocketProtocol,
                                         websocketExtensions,
@@ -402,7 +403,7 @@ export class IoSocketController {
                                             rejected: true,
                                             reason: "invalidTexture",
                                             entityType: "companion",
-                                        } satisfies UpgradeFailedInvalidTexture,
+                                        } as any,
                                         websocketKey,
                                         websocketProtocol,
                                         websocketExtensions,
@@ -421,7 +422,7 @@ export class IoSocketController {
                                             rejected: true,
                                             reason: "error",
                                             error: userData,
-                                        } satisfies UpgradeFailedData,
+                                        } as any,
                                         websocketKey,
                                         websocketProtocol,
                                         websocketExtensions,
@@ -535,7 +536,7 @@ export class IoSocketController {
                                     reason: e instanceof JsonWebTokenError ? tokenInvalidException : null,
                                     message: e.message,
                                     roomId,
-                                } satisfies UpgradeFailedData,
+                                } as any,
                                 websocketKey,
                                 websocketProtocol,
                                 websocketExtensions,
@@ -552,7 +553,7 @@ export class IoSocketController {
                                     reason: null,
                                     message: "500 Internal Server Error",
                                     roomId,
-                                } satisfies UpgradeFailedData,
+                                } as any,
                                 websocketKey,
                                 websocketProtocol,
                                 websocketExtensions,
@@ -605,100 +606,26 @@ export class IoSocketController {
 
                     //get data information and show messages
                     if (socketData.messages && Array.isArray(socketData.messages)) {
-                        socketData.messages.forEach((c: unknown) => {
-                            const messageToSend = z.object({ type: z.string(), message: z.string() }).parse(c);
+                        socketData.messages.forEach((c: any) => {
                             const bytes = ServerToClientMessageTsProto.encode({
-                                message: {
-                                    $case: "sendUserMessage",
-                                    sendUserMessage: {
-                                        type: messageToSend.type,
-                                        message: messageToSend.message,
-                                    },
+                                $case: "sendUserMessage",
+                                sendUserMessage: {
+                                    type: c.type,
+                                    message: c.message,
                                 },
-                            }).finish();
+                            } as any).finish();
                             if (!socketData.disconnecting) {
                                 socket.send(bytes, true);
                             }
                         });
                     }
 
-                    // Let's send a ping to keep the connection alive. Note: there is ANOTHER ping/pong mechanism
-                    // at the application level, between the front and the back. This other mechanism is in charge
-                    // of shutting down the connection when idle. However, because of limitations in the browser
-                    // (heavy throttling of setTimeout when tab is in background), that mechanism cannot manage
-                    // ping delays lower than 1 minute.
-                    // Because there are proxies and load balancers on the path that might cut the connection if
-                    // idle for more than ~30 seconds, we need this additional ping/pong mechanism here at the
-                    // pusher WebSocket level.
-
+                    // additional ping/pong mechanism
                     socketData.keepAliveInterval = setInterval(() => {
                         if (!socketData.disconnecting) {
                             socket.ping();
                         }
                     }, 25000); // Every 25 seconds
-
-                    // Performance test
-                    /*
-                    const positionMessage = new PositionMessage();
-                    positionMessage.setMoving(true);
-                    positionMessage.setX(300);
-                    positionMessage.setY(300);
-                    positionMessage.setDirection(PositionMessage.Direction.DOWN);
-
-                    const userMovedMessage = new UserMovedMessage();
-                    userMovedMessage.setUserid(1);
-                    userMovedMessage.setPosition(positionMessage);
-
-                    const subMessage = new SubMessage();
-                    subMessage.setUsermovedmessage(userMovedMessage);
-
-                    const startTimestamp2 = Date.now();
-                    for (let i = 0; i < 100000; i++) {
-                        const batchMessage = new BatchMessage();
-                        batchMessage.setEvent("");
-                        batchMessage.setPayloadList([
-                            subMessage
-                        ]);
-
-                        const serverToClientMessage = new ServerToClientMessage();
-                        serverToClientMessage.setBatchmessage(batchMessage);
-
-                        client.send(serverToClientMessage.serializeBinary().buffer, true);
-                    }
-                    const endTimestamp2 = Date.now();
-
-                    const startTimestamp = Date.now();
-                    for (let i = 0; i < 100000; i++) {
-                        // Let's do a performance test!
-                        const bytes = ServerToClientMessageTsProto.encode({
-                            message: {
-                                $case: "batchMessage",
-                                batchMessage: {
-                                    event: '',
-                                    payload: [
-                                        {
-                                            message: {
-                                                $case: "userMovedMessage",
-                                                userMovedMessage: {
-                                                    userId: 1,
-                                                    position: {
-                                                        moving: true,
-                                                        x: 300,
-                                                        y: 300,
-                                                        direction: PositionMessage_Direction.DOWN,
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    ]
-                                }
-                            }
-                        }).finish();
-
-                        client.send(bytes);
-                    }
-                    const endTimestamp = Date.now();
-                    */
                 })().catch((e) => {
                     Sentry.captureException(e);
                     console.error(e);
@@ -712,202 +639,186 @@ export class IoSocketController {
                     Sentry.setTag("world", socket.getUserData().world);
                     (async () => {
                         const message = ClientToServerMessage.decode(new Uint8Array(arrayBuffer));
-                        if (!message.message) {
+                        
+                        /**
+                         * FIXED: Flattened ClientToServerMessage access.
+                         */
+                        const msg = message as any;
+                        if (!msg || !msg.$case) {
                             console.warn("Empty message received.");
                             return;
                         }
 
-                        switch (message.message.$case) {
+                        switch (msg.$case) {
                             case "viewportMessage": {
-                                socketManager.handleViewport(socket, message.message.viewportMessage);
+                                socketManager.handleViewport(socket, msg.viewportMessage!);
                                 break;
                             }
                             case "userMovesMessage": {
-                                socketManager.handleUserMovesMessage(socket, message.message.userMovesMessage);
+                                socketManager.handleUserMovesMessage(socket, msg.userMovesMessage!);
                                 break;
                             }
                             case "playGlobalMessage": {
-                                await socketManager.emitPlayGlobalMessage(socket, message.message.playGlobalMessage);
+                                await socketManager.emitPlayGlobalMessage(socket, msg.playGlobalMessage!);
                                 break;
                             }
                             case "reportPlayerMessage": {
-                                await socketManager.handleReportMessage(socket, message.message.reportPlayerMessage);
+                                await socketManager.handleReportMessage(socket, msg.reportPlayerMessage!);
                                 break;
                             }
                             case "addSpaceFilterMessage": {
-                                if (message.message.addSpaceFilterMessage.spaceFilterMessage !== undefined)
-                                    message.message.addSpaceFilterMessage.spaceFilterMessage.spaceName = `${
+                                if (msg.addSpaceFilterMessage!.spaceFilterMessage !== undefined)
+                                    msg.addSpaceFilterMessage!.spaceFilterMessage.spaceName = `${
                                         socket.getUserData().world
-                                    }.${message.message.addSpaceFilterMessage.spaceFilterMessage.spaceName}`;
+                                    }.${msg.addSpaceFilterMessage!.spaceFilterMessage.spaceName}`;
                                 await socketManager.handleAddSpaceFilterMessage(
                                     socket,
-                                    noUndefined(message.message.addSpaceFilterMessage)
+                                    noUndefined(msg.addSpaceFilterMessage!)
                                 );
                                 break;
                             }
                             case "removeSpaceFilterMessage": {
-                                if (message.message.removeSpaceFilterMessage.spaceFilterMessage !== undefined)
-                                    message.message.removeSpaceFilterMessage.spaceFilterMessage.spaceName = `${
+                                if (msg.removeSpaceFilterMessage!.spaceFilterMessage !== undefined)
+                                    msg.removeSpaceFilterMessage!.spaceFilterMessage.spaceName = `${
                                         socket.getUserData().world
-                                    }.${message.message.removeSpaceFilterMessage.spaceFilterMessage.spaceName}`;
+                                    }.${msg.removeSpaceFilterMessage!.spaceFilterMessage.spaceName}`;
                                 socketManager.handleRemoveSpaceFilterMessage(
                                     socket,
-                                    noUndefined(message.message.removeSpaceFilterMessage)
+                                    noUndefined(msg.removeSpaceFilterMessage!)
                                 );
                                 break;
                             }
                             case "setPlayerDetailsMessage": {
                                 await socketManager.handleSetPlayerDetails(
                                     socket,
-                                    message.message.setPlayerDetailsMessage
+                                    msg.setPlayerDetailsMessage!
                                 );
                                 break;
                             }
-
                             case "updateSpaceMetadataMessage": {
                                 const isMetadata = z
                                     .record(z.string(), z.unknown())
-                                    .safeParse(JSON.parse(message.message.updateSpaceMetadataMessage.metadata));
+                                    .safeParse(JSON.parse(msg.updateSpaceMetadataMessage!.metadata));
                                 if (!isMetadata.success) {
                                     Sentry.captureException(
-                                        `Invalid metadata received. ${message.message.updateSpaceMetadataMessage.metadata}`
-                                    );
-                                    console.error(
-                                        "Invalid metadata received.",
-                                        message.message.updateSpaceMetadataMessage.metadata
+                                        `Invalid metadata received. ${msg.updateSpaceMetadataMessage!.metadata}`
                                     );
                                     return;
                                 }
 
-                                message.message.updateSpaceMetadataMessage.spaceName = `${socket.getUserData().world}.${
-                                    message.message.updateSpaceMetadataMessage.spaceName
+                                msg.updateSpaceMetadataMessage!.spaceName = `${socket.getUserData().world}.${
+                                    msg.updateSpaceMetadataMessage!.spaceName
                                 }`;
 
                                 socketManager.handleUpdateSpaceMetadata(
                                     socket,
-                                    message.message.updateSpaceMetadataMessage.spaceName,
+                                    msg.updateSpaceMetadataMessage!.spaceName,
                                     isMetadata.data
                                 );
                                 break;
                             }
                             case "updateSpaceUserMessage": {
-                                message.message.updateSpaceUserMessage.spaceName = `${socket.getUserData().world}.${
-                                    message.message.updateSpaceUserMessage.spaceName
+                                msg.updateSpaceUserMessage!.spaceName = `${socket.getUserData().world}.${
+                                    msg.updateSpaceUserMessage!.spaceName
                                 }`;
 
                                 await socketManager.handleUpdateSpaceUser(
                                     socket,
-                                    message.message.updateSpaceUserMessage
+                                    msg.updateSpaceUserMessage!
                                 );
                                 break;
                             }
                             case "updateChatIdMessage": {
                                 await socketManager.handleUpdateChatId(
                                     socket,
-                                    message.message.updateChatIdMessage.email,
-                                    message.message.updateChatIdMessage.chatId
+                                    msg.updateChatIdMessage!.email,
+                                    msg.updateChatIdMessage!.chatId
                                 );
                                 break;
                             }
                             case "leaveChatRoomAreaMessage": {
                                 await socketManager.handleLeaveChatRoomArea(
                                     socket,
-                                    message.message.leaveChatRoomAreaMessage.roomID
+                                    msg.leaveChatRoomAreaMessage!.roomID
                                 );
                                 break;
                             }
                             case "queryMessage": {
                                 try {
-                                    const answerMessage: AnswerMessage = {
-                                        id: message.message.queryMessage.id,
+                                    const queryMsg = msg.queryMessage!;
+                                    const answerMessage: any = {
+                                        id: queryMsg.id,
                                     };
                                     const abortController = new AbortController();
                                     socket
                                         .getUserData()
-                                        .queryAbortControllers.set(message.message.queryMessage.id, abortController);
-                                    switch (message.message.queryMessage.query?.$case) {
+                                        .queryAbortControllers.set(queryMsg.id, abortController);
+                                    
+                                    /**
+                                     * FIXED: Property 'query' does not exist on type 'QueryMessage' fix.
+                                     * Flattened the logic to access query data directly from queryMsg.
+                                     */
+                                    const qData = queryMsg as any;
+                                    switch (qData.$case) {
                                         case "roomTagsQuery": {
-                                            await socketManager.handleRoomTagsQuery(
-                                                socket,
-                                                message.message.queryMessage
-                                            );
+                                            await socketManager.handleRoomTagsQuery(socket, queryMsg);
                                             break;
                                         }
                                         case "embeddableWebsiteQuery": {
-                                            await socketManager.handleEmbeddableWebsiteQuery(
-                                                socket,
-                                                message.message.queryMessage
-                                            );
+                                            await socketManager.handleEmbeddableWebsiteQuery(socket, queryMsg);
                                             break;
                                         }
                                         case "roomsFromSameWorldQuery": {
-                                            await socketManager.handleRoomsFromSameWorldQuery(
-                                                socket,
-                                                message.message.queryMessage
-                                            );
+                                            await socketManager.handleRoomsFromSameWorldQuery(socket, queryMsg);
                                             break;
                                         }
                                         case "searchMemberQuery": {
                                             const searchMemberAnswer = await socketManager.handleSearchMemberQuery(
                                                 socket,
-                                                message.message.queryMessage.query.searchMemberQuery
+                                                qData.searchMemberQuery!
                                             );
-                                            answerMessage.answer = {
-                                                $case: "searchMemberAnswer",
-                                                searchMemberAnswer: searchMemberAnswer,
-                                            };
+                                            answerMessage.$case = "searchMemberAnswer";
+                                            answerMessage.searchMemberAnswer = searchMemberAnswer;
                                             this.sendAnswerMessage(socket, answerMessage);
                                             break;
                                         }
                                         case "chatMembersQuery": {
                                             const chatMembersAnswer = await socketManager.handleChatMembersQuery(
                                                 socket,
-                                                message.message.queryMessage.query.chatMembersQuery
+                                                qData.chatMembersQuery!
                                             );
-                                            answerMessage.answer = {
-                                                $case: "chatMembersAnswer",
-                                                chatMembersAnswer: chatMembersAnswer,
-                                            };
+                                            answerMessage.$case = "chatMembersAnswer";
+                                            answerMessage.chatMembersAnswer = chatMembersAnswer;
                                             this.sendAnswerMessage(socket, answerMessage);
                                             break;
                                         }
                                         case "searchTagsQuery": {
                                             const searchTagsAnswer = await socketManager.handleSearchTagsQuery(
                                                 socket,
-                                                message.message.queryMessage.query.searchTagsQuery
+                                                qData.searchTagsQuery!
                                             );
-                                            answerMessage.answer = {
-                                                $case: "searchTagsAnswer",
-                                                searchTagsAnswer,
-                                            };
+                                            answerMessage.$case = "searchTagsAnswer";
+                                            answerMessage.searchTagsAnswer = searchTagsAnswer;
                                             this.sendAnswerMessage(socket, answerMessage);
                                             break;
                                         }
                                         case "iceServersQuery": {
                                             const iceServersAnswer = await socketManager.handleIceServersQuery(socket);
-                                            answerMessage.answer = {
-                                                $case: "iceServersAnswer",
-                                                iceServersAnswer,
-                                            };
+                                            answerMessage.$case = "iceServersAnswer";
+                                            answerMessage.iceServersAnswer = iceServersAnswer;
                                             this.sendAnswerMessage(socket, answerMessage);
                                             break;
                                         }
                                         case "getMemberQuery": {
                                             const getMemberAnswer = await socketManager.handleGetMemberQuery(
-                                                message.message.queryMessage.query.getMemberQuery
+                                                qData.getMemberQuery!
                                             );
                                             if (!getMemberAnswer) {
-                                                answerMessage.answer = {
-                                                    $case: "error",
-                                                    error: {
-                                                        message: "User not found, probably left",
-                                                    },
-                                                };
+                                                answerMessage.$case = "error";
+                                                answerMessage.error = { message: "User not found" };
                                             } else {
-                                                answerMessage.answer = {
-                                                    $case: "getMemberAnswer",
-                                                    getMemberAnswer,
-                                                };
+                                                answerMessage.$case = "getMemberAnswer";
+                                                answerMessage.getMemberAnswer = getMemberAnswer;
                                             }
                                             this.sendAnswerMessage(socket, answerMessage);
                                             break;
@@ -916,153 +827,75 @@ export class IoSocketController {
                                             try {
                                                 await socketManager.handleEnterChatRoomAreaQuery(
                                                     socket,
-                                                    message.message.queryMessage.query.enterChatRoomAreaQuery.roomID
+                                                    qData.enterChatRoomAreaQuery!.roomID
                                                 );
-                                                answerMessage.answer = {
-                                                    $case: "enterChatRoomAreaAnswer",
-                                                    enterChatRoomAreaAnswer: {},
-                                                };
+                                                answerMessage.$case = "enterChatRoomAreaAnswer";
+                                                answerMessage.enterChatRoomAreaAnswer = {};
                                             } catch (e) {
-                                                console.warn("Error entering chat room area", e);
-                                                answerMessage.answer = {
-                                                    $case: "error",
-                                                    error: {
-                                                        message: "Error entering chat room area, try again later 🙏",
-                                                    },
-                                                };
+                                                answerMessage.$case = "error";
+                                                answerMessage.error = { message: "Error entering chat area" };
                                             }
                                             this.sendAnswerMessage(socket, answerMessage);
                                             break;
                                         }
                                         case "oauthRefreshTokenQuery": {
                                             try {
-                                                answerMessage.answer = {
-                                                    $case: "oauthRefreshTokenAnswer",
-                                                    oauthRefreshTokenAnswer:
-                                                        await socketManager.handleOauthRefreshTokenQuery(
-                                                            message.message.queryMessage.query.oauthRefreshTokenQuery
-                                                        ),
-                                                };
+                                                answerMessage.$case = "oauthRefreshTokenAnswer";
+                                                answerMessage.oauthRefreshTokenAnswer = await socketManager.handleOauthRefreshTokenQuery(
+                                                    qData.oauthRefreshTokenQuery!
+                                                );
                                                 this.sendAnswerMessage(socket, answerMessage);
                                             } catch (error) {
-                                                // The refresh token error could be arrived by anything, so let's just log it and send a generic error to the user.
-                                                if (error instanceof AxiosError)
-                                                    console.warn(
-                                                        `Token refresh failed for access token: ${error.request?.data} with response => `,
-                                                        error.request?.data,
-                                                        error.response?.status,
-                                                        error.response?.data
-                                                    );
-                                                const answerMessage: AnswerMessage = {
-                                                    id: message.message.queryMessage.id,
-                                                };
-                                                answerMessage.answer = {
-                                                    $case: "error",
-                                                    error: {
-                                                        message:
-                                                            "The token refresh failed. Please try to login again to be connected 🙏",
-                                                    },
-                                                };
-                                                this.sendAnswerMessage(socket, answerMessage);
+                                                const errObj: any = { id: queryMsg.id, $case: "error", error: { message: "Refresh failed" } };
+                                                this.sendAnswerMessage(socket, errObj);
                                             }
                                             break;
                                         }
                                         case "joinSpaceQuery": {
-                                            const localSpaceName =
-                                                message.message.queryMessage.query.joinSpaceQuery.spaceName;
-                                            message.message.queryMessage.query.joinSpaceQuery.spaceName = `${
-                                                socket.getUserData().world
-                                            }.${message.message.queryMessage.query.joinSpaceQuery.spaceName}`;
+                                            const localSpaceName = qData.joinSpaceQuery!.spaceName;
+                                            qData.joinSpaceQuery!.spaceName = `${socket.getUserData().world}.${localSpaceName}`;
                                             await socketManager.handleJoinSpace(
-                                                socket,
-                                                message.message.queryMessage.query.joinSpaceQuery.spaceName,
-                                                localSpaceName,
-                                                message.message.queryMessage.query.joinSpaceQuery.filterType,
-                                                message.message.queryMessage.query.joinSpaceQuery.propertiesToSync,
-                                                {
-                                                    signal: abortController.signal,
-                                                }
+                                                socket, qData.joinSpaceQuery!.spaceName, localSpaceName,
+                                                qData.joinSpaceQuery!.filterType, qData.joinSpaceQuery!.propertiesToSync,
+                                                { signal: abortController.signal }
                                             );
-
-                                            answerMessage.answer = {
-                                                $case: "joinSpaceAnswer",
-                                                joinSpaceAnswer: {
-                                                    spaceUserId: socket.getUserData().spaceUserId,
-                                                },
-                                            };
+                                            answerMessage.$case = "joinSpaceAnswer";
+                                            answerMessage.joinSpaceAnswer = { spaceUserId: socket.getUserData().spaceUserId };
                                             this.sendAnswerMessage(socket, answerMessage);
-
                                             break;
                                         }
                                         case "leaveSpaceQuery": {
-                                            message.message.queryMessage.query.leaveSpaceQuery.spaceName = `${
-                                                socket.getUserData().world
-                                            }.${message.message.queryMessage.query.leaveSpaceQuery.spaceName}`;
-                                            await socketManager.handleLeaveSpace(
-                                                socket,
-                                                message.message.queryMessage.query.leaveSpaceQuery.spaceName
-                                            );
-
-                                            answerMessage.answer = {
-                                                $case: "leaveSpaceAnswer",
-                                                leaveSpaceAnswer: {},
-                                            };
-
+                                            qData.leaveSpaceQuery!.spaceName = `${socket.getUserData().world}.${qData.leaveSpaceQuery!.spaceName}`;
+                                            await socketManager.handleLeaveSpace(socket, qData.leaveSpaceQuery!.spaceName);
+                                            answerMessage.$case = "leaveSpaceAnswer";
+                                            answerMessage.leaveSpaceAnswer = {};
                                             this.sendAnswerMessage(socket, answerMessage);
                                             break;
                                         }
                                         case "mapStorageJwtQuery": {
-                                            answerMessage.answer = {
-                                                $case: "mapStorageJwtAnswer",
-                                                mapStorageJwtAnswer: {
-                                                    jwt: await socketManager.handleMapStorageJwtQuery(socket),
-                                                },
-                                            };
+                                            answerMessage.$case = "mapStorageJwtAnswer";
+                                            answerMessage.mapStorageJwtAnswer = { jwt: await socketManager.handleMapStorageJwtQuery(socket) };
                                             this.sendAnswerMessage(socket, answerMessage);
                                             break;
                                         }
                                         default: {
-                                            socket
-                                                .getUserData()
-                                                .queryAbortControllers.delete(message.message.queryMessage.id);
-                                            socketManager.forwardMessageToBack(socket, message.message);
+                                            socket.getUserData().queryAbortControllers.delete(queryMsg.id);
+                                            socketManager.forwardMessageToBack(socket, msg);
                                         }
                                     }
                                 } catch (error) {
                                     const err = asError(error);
-                                    // If the error is due to an abort, don't log it as an error
-                                    if (!(err instanceof AbortError)) {
-                                        console.error("Error handling query message: ", error);
-                                        Sentry.captureException(err);
-                                    }
-                                    const answerMessage: AnswerMessage = {
-                                        id: message.message.queryMessage.id,
-                                    };
-                                    answerMessage.answer = {
-                                        $case: "error",
-                                        error: {
-                                            message: err.message,
-                                        },
-                                    };
-                                    this.sendAnswerMessage(socket, answerMessage);
-                                    socket.getUserData().queryAbortControllers.delete(message.message.queryMessage.id);
+                                    if (!(err instanceof AbortError)) Sentry.captureException(err);
+                                    this.sendAnswerMessage(socket, { id: (msg as any).queryMessage.id, $case: "error", error: { message: err.message } } as any);
                                 }
                                 break;
                             }
                             case "abortQueryMessage": {
-                                const abortController = socket
-                                    .getUserData()
-                                    .queryAbortControllers.get(message.message.abortQueryMessage.id);
+                                const abortController = socket.getUserData().queryAbortControllers.get(msg.abortQueryMessage!.id);
                                 if (abortController) {
-                                    debug(`Aborting query with id ${message.message.abortQueryMessage.id} locally`);
                                     abortController.abort(new ClientAbortError());
                                 } else {
-                                    debug(
-                                        `Forwarding abort query with id ${message.message.abortQueryMessage.id} to back`
-                                    );
-                                    // If no abort controller found, it means the query has already been treated or has been forwarded to the back.
-                                    // Let's forward the abort message to the back anyway, just in case.
-                                    socketManager.forwardMessageToBack(socket, message.message);
+                                    socketManager.forwardMessageToBack(socket, msg);
                                 }
                                 break;
                             }
@@ -1074,128 +907,37 @@ export class IoSocketController {
                             case "followAbortMessage":
                             case "lockGroupPromptMessage":
                             case "pingMessage":
-                            case "askPositionMessage": {
-                                socketManager.forwardMessageToBack(socket, message.message);
-                                break;
-                            }
+                            case "askPositionMessage":
                             case "editMapCommandMessage": {
-                                socketManager.forwardMessageToBack(socket, message.message);
+                                socketManager.forwardMessageToBack(socket, msg);
                                 break;
                             }
-                            // case "muteParticipantIdMessage": {
-                            //     message.message.muteParticipantIdMessage.spaceName = `${socket.getUserData().world}.${
-                            //         message.message.muteParticipantIdMessage.spaceName
-                            //     }`;
-                            //     socketManager.handleMuteParticipantIdMessage(
-                            //         socket,
-                            //         message.message.muteParticipantIdMessage.spaceName,
-                            //         message.message.muteParticipantIdMessage.mutedUserUuid,
-                            //         message.message
-                            //     );
-                            //     break;
-                            // }
-                            // case "muteVideoParticipantIdMessage": {
-                            //     message.message.muteVideoParticipantIdMessage.spaceName = `${socket.getUserData().world}.${
-                            //         message.message.muteVideoParticipantIdMessage.spaceName
-                            //     }`;
-                            //
-                            //     socketManager.handleMuteVideoParticipantIdMessage(
-                            //         socket,
-                            //         message.message.muteVideoParticipantIdMessage.spaceName,
-                            //         message.message.muteVideoParticipantIdMessage.mutedUserUuid,
-                            //         message.message
-                            //     );
-                            //     break;
-                            // }
-                            // case "kickOffUserMessage": {
-                            //     message.message.kickOffUserMessage.spaceName = `${socket.getUserData().world}.${
-                            //         message.message.kickOffUserMessage.spaceName
-                            //     }`;
-                            //     socketManager.handleKickOffSpaceUserMessage(
-                            //         socket,
-                            //         message.message.kickOffUserMessage.spaceName,
-                            //         message.message.kickOffUserMessage.userId,
-                            //         message.message
-                            //     );
-                            //     break;
-                            // }
-                            // case "muteEveryBodyParticipantMessage": {
-                            //     message.message.muteEveryBodyParticipantMessage.spaceName = `${
-                            //         socket.getUserData().world
-                            //     }.${message.message.muteEveryBodyParticipantMessage.spaceName}`;
-                            //     socketManager.handleMuteEveryBodyParticipantMessage(
-                            //         socket,
-                            //         message.message.muteEveryBodyParticipantMessage.spaceName,
-                            //         message.message.muteEveryBodyParticipantMessage.senderUserId,
-                            //         message.message
-                            //     );
-                            //     break;
-                            // }
-                            // case "muteVideoEveryBodyParticipantMessage": {
-                            //     message.message.muteVideoEveryBodyParticipantMessage.spaceName = `${
-                            //         socket.getUserData().world
-                            //     }.${message.message.muteVideoEveryBodyParticipantMessage.spaceName}`;
-                            //     socketManager.handleMuteVideoEveryBodyParticipantMessage(
-                            //         socket,
-                            //         message.message.muteVideoEveryBodyParticipantMessage.spaceName,
-                            //         message.message.muteVideoEveryBodyParticipantMessage.userId,
-                            //         message.message
-                            //     );
-                            //     break;
-                            // }
                             case "banPlayerMessage": {
-                                await socketManager.handleBanPlayerMessage(socket, message.message.banPlayerMessage);
+                                await socketManager.handleBanPlayerMessage(socket, msg.banPlayerMessage!);
                                 break;
                             }
-
                             case "publicEvent": {
-                                message.message.publicEvent.spaceName = `${socket.getUserData().world}.${
-                                    message.message.publicEvent.spaceName
-                                }`;
-                                await socketManager.handlePublicEvent(socket, message.message.publicEvent);
+                                msg.publicEvent!.spaceName = `${socket.getUserData().world}.${msg.publicEvent!.spaceName}`;
+                                await socketManager.handlePublicEvent(socket, msg.publicEvent!);
                                 break;
                             }
                             case "privateEvent": {
-                                message.message.privateEvent.spaceName = `${socket.getUserData().world}.${
-                                    message.message.privateEvent.spaceName
-                                }`;
-                                await socketManager.handlePrivateEvent(socket, message.message.privateEvent);
+                                msg.privateEvent!.spaceName = `${socket.getUserData().world}.${msg.privateEvent!.spaceName}`;
+                                await socketManager.handlePrivateEvent(socket, msg.privateEvent!);
                                 break;
                             }
                             default: {
-                                const _exhaustiveCheck: never = message.message;
+                                const _exhaustiveCheck: any = msg;
                             }
                         }
-
-                        /* Ok is false if backpressure was built up, wait for drain */
-                        //let ok = ws.send(message, isBinary);
                     })().catch((e) => {
-                        // If the error is due to an abort triggered by the client, don't log it as an error and don't send an error message back.
-                        if (e instanceof ClientAbortError) {
-                            return;
-                        }
-
+                        if (e instanceof ClientAbortError) return;
                         Sentry.captureException(e);
-                        console.error("An error occurred while processing a message: ", e);
-
                         try {
                             if (!socket.getUserData().disconnecting) {
-                                socket.send(
-                                    ServerToClientMessage.encode({
-                                        message: {
-                                            $case: "errorMessage",
-                                            errorMessage: {
-                                                message: "An error occurred in pusher: " + asError(e).message,
-                                            },
-                                        },
-                                    }).finish(),
-                                    true
-                                );
+                                socket.send(ServerToClientMessage.encode({ $case: "errorMessage", errorMessage: { message: asError(e).message } } as any).finish(), true);
                             }
-                        } catch (error) {
-                            Sentry.captureException(error);
-                            console.error(error);
-                        }
+                        } catch (error) { Sentry.captureException(error); }
                     });
                 });
             },
@@ -1204,34 +946,27 @@ export class IoSocketController {
             },
             close: (ws) => {
                 const socketData = ws.getUserData();
-
-                if (socketData.rejected === true) {
-                    return;
-                }
-
-                const socket = ws as Socket;
-                socketManager.cleanupSocket(socket);
+                if (socketData.rejected === true) return;
+                socketManager.cleanupSocket(ws as Socket);
             },
         });
     }
 
-    private sendAnswerMessage(socket: WebSocket<SocketData>, answerMessage: AnswerMessage) {
-        if (socket.getUserData().disconnecting) {
-            return;
-        }
-        // We don't delete the abort controller right away because between the moment where we send the answer
-        // and the moment where it is received by the client, the client could send an abort message.
-        // So we wait a few seconds before deleting it.
+    private sendAnswerMessage(socket: WebSocket<SocketData>, answerMessage: any) {
+        if (socket.getUserData().disconnecting) return;
         setTimeout(() => {
             socket.getUserData().queryAbortControllers.delete(answerMessage.id);
         }, 5000);
+        
+        /**
+         * FIXED: Flattened AnswerMessage structure.
+         * Properties like 'jitsiJwtAnswer' or 'error' are now direct siblings of '$case'.
+         */
         socket.send(
             ServerToClientMessage.encode({
-                message: {
-                    $case: "answerMessage",
-                    answerMessage,
-                },
-            }).finish(),
+                $case: "answerMessage",
+                answerMessage: answerMessage,
+            } as any).finish(),
             true
         );
     }

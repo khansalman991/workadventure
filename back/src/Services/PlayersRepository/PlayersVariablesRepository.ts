@@ -1,4 +1,5 @@
-import { asError } from "catch-unknown";
+import * as catchUnknown from "catch-unknown";
+const asError = catchUnknown.asError;
 import { getRedisClient } from "../RedisClient";
 import { RedisPlayersVariablesRepository } from "./RedisPlayersVariablesRepository";
 import { VoidPlayersVariablesRepository } from "./VoidPlayersVariablesRepository";

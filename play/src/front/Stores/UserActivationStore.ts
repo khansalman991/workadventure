@@ -1,4 +1,5 @@
-import { Deferred } from "ts-deferred";
+import * as DeferredModule from "ts-deferred";
+const Deferred = DeferredModule.Deferred;
 import * as Sentry from "@sentry/svelte";
 
 class UserActivationManager {

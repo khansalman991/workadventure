@@ -26,7 +26,8 @@ import type {
     UpdateMapToNewestWithKeyMessage,
 } from "@workadventure/messages";
 import type { Empty } from "@workadventure/messages/src/ts-proto-generated/google/protobuf/empty";
-import { asError } from "catch-unknown";
+import * as catchUnknown from "catch-unknown";
+const asError = catchUnknown.asError;
 import { DeleteCustomEntityMapStorageCommand } from "./Commands/Entity/DeleteCustomEntityMapStorageCommand";
 import { ModifyCustomEntityMapStorageCommand } from "./Commands/Entity/ModifyCustomEntityMapStorageCommand";
 import { UploadEntityMapStorageCommand } from "./Commands/Entity/UploadEntityMapStorageCommand";

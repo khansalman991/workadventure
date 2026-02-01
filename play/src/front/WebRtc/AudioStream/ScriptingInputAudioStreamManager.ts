@@ -1,5 +1,10 @@
 import type { Subscription } from "rxjs";
-import { Deferred } from "ts-deferred";
+import * as DeferredModule from "ts-deferred";
+/** * FIX: We define the type separately so it can be used for type definitions 
+ */
+import type { Deferred as DeferredType } from "ts-deferred";
+const Deferred = DeferredModule.Deferred;
+
 import type { Readable, Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { iframeListener } from "../../Api/IframeListener";
@@ -12,7 +17,11 @@ import { InputPCMStreamer } from "./InputPCMStreamer";
  */
 export class ScriptingInputAudioStreamManager {
     private appendPCMDataStreamUnsubscriber: Subscription | undefined;
-    private pcmStreamerDeferred: Deferred<InputPCMStreamer> = new Deferred<InputPCMStreamer>();
+    
+    /** * FIX: Use DeferredType for the type definition and Deferred for the value 
+     */
+    private pcmStreamerDeferred: DeferredType<InputPCMStreamer> = new Deferred<InputPCMStreamer>();
+    
     private pcmStreamerResolved = false;
     private pcmStreamerResolving = false;
     private isListening = false;
@@ -45,7 +54,6 @@ export class ScriptingInputAudioStreamManager {
 
         this.isListening = true;
 
-        // Start listening to the stream
         if (this.pcmStreamerResolved || this.pcmStreamerResolving) {
             throw new Error("Already listening");
         }
@@ -60,17 +68,16 @@ export class ScriptingInputAudioStreamManager {
             iframeListener.postMessage(
                 {
                     type: "appendPCMData",
-                    data: { data: data as Float32Array<ArrayBuffer> },
+                    /**
+                     * FIX: Cast to any to bypass the ArrayBuffer vs SharedArrayBuffer incompatibility.
+                     * This prevents the "Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'" error.
+                     */
+                    data: { data: data as any },
                 },
-                undefined /*, [data.buffer]*/
+                undefined
             );
-            // Note: if we try to transfer the buffer, we get the following error:
-            //      ArrayBuffer already detached.
-            // It looks like a bug in the browser to me (the ArrayBuffer was detached from the worklet process
-            // and should be attached to the main process and detachable again to the scripting iframe).
         });
 
-        // Let's add all the peers to the stream
         get(videoStreamElementsStore).forEach((peer) => {
             const streamable = get(peer.streamable);
             if (streamable && (streamable.media.type === "webrtc" || streamable.media.type === "livekit")) {
@@ -85,7 +92,6 @@ export class ScriptingInputAudioStreamManager {
         this.appendPCMDataStreamUnsubscriber?.unsubscribe();
         this.appendPCMDataStreamUnsubscriber = undefined;
 
-        // Let's remove all the peers to the stream
         get(videoStreamElementsStore).forEach((peer) => {
             const streamable = get(peer.streamable);
             if (streamable && (streamable.media.type === "webrtc" || streamable.media.type === "livekit")) {
@@ -95,11 +101,11 @@ export class ScriptingInputAudioStreamManager {
 
         if (this.pcmStreamerResolved || this.pcmStreamerResolving) {
             this.pcmStreamerDeferred.promise
-                .then((pcmStreamer) => {
+                .then((pcmStreamer: InputPCMStreamer) => {
                     pcmStreamer.close();
                     this.pcmStreamerDeferred = new Deferred<InputPCMStreamer>();
                 })
-                .catch((e) => {
+                .catch((e: Error) => {
                     console.error("Error while stopping stream", e);
                 });
         } else {
@@ -116,22 +122,22 @@ export class ScriptingInputAudioStreamManager {
         const unsubscriber = streamStore.subscribe((stream) => {
             if (stream) {
                 this.pcmStreamerDeferred.promise
-                    .then((pcmStreamer) => {
+                    .then((pcmStreamer: InputPCMStreamer) => {
                         pcmStreamer.addMediaStream(stream);
                         lastValue = stream;
                     })
-                    .catch((e) => {
+                    .catch((e: Error) => {
                         console.error("Error while adding stream", e);
                     });
             } else {
                 this.pcmStreamerDeferred.promise
-                    .then((pcmStreamer) => {
+                    .then((pcmStreamer: InputPCMStreamer) => {
                         if (lastValue) {
                             pcmStreamer.removeMediaStream(lastValue);
                             lastValue = undefined;
                         }
                     })
-                    .catch((e) => {
+                    .catch((e: Error) => {
                         console.error("Error while removing stream", e);
                     });
             }
@@ -156,10 +162,10 @@ export class ScriptingInputAudioStreamManager {
 
         if (this.pcmStreamerResolved || this.pcmStreamerResolving) {
             this.pcmStreamerDeferred.promise
-                .then((pcmStreamer) => {
+                .then((pcmStreamer: InputPCMStreamer) => {
                     pcmStreamer.close();
                 })
-                .catch((e) => {
+                .catch((e: Error) => {
                     console.error("Error while closing stream", e);
                 });
         }

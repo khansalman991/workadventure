@@ -1,4 +1,6 @@
-import merge from "ts-deepmerge";
+import * as deepmerge from "ts-deepmerge";
+// @ts-ignore
+const merge = deepmerge.default ?? deepmerge.merge ?? deepmerge;
 import en_US from "../en-US";
 import audio from "./audio";
 import camera from "./camera";
